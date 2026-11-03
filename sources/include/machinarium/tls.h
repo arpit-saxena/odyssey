@@ -29,6 +29,7 @@ int mm_tls_writev(mm_io_t *, const struct iovec *, int);
 int mm_tls_read_pending(mm_io_t *);
 int mm_tls_read(mm_io_t *, char *, int);
 int mm_tls_verify_common_name(mm_io_t *, char *);
+int mm_tls_alpn_used(mm_io_t *);
 SSL_CTX *mm_tls_get_context(mm_io_t *io, int is_client);
 void mm_tls_ctx_free(struct mm_tls_ctx *);
 

@@ -67,6 +67,11 @@ order in which a client tries connections. A listener does not initiate anything
 it either accepts a plaintext connection or does not. Both modes therefore mean
 the same thing here — TLS is permitted but not enforced.
 
+When TLS is enabled, clients may also start the TLS handshake directly instead
+of sending an SSLRequest first (libpq `sslnegotiation=direct`, PostgreSQL 17+).
+Such clients must offer the `postgresql` ALPN protocol. Direct TLS is not
+accepted on Unix sockets.
+
 ## **tls\_ca\_file**
 *string*
 

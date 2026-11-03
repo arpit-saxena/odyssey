@@ -309,11 +309,62 @@ static int reject_unsupported_request(od_client_t *client)
 	return 0;
 }
 
+static int od_frontend_direct_ssl_request(od_client_t *client)
+{
+	od_instance_t *instance = client->global->instance;
+	mm_io_t *io = client->io.io;
+	uint8_t first_byte;
+
+	od_wait_event_start(OD_WAIT_CONNECT_CLIENT_STARTUP);
+	mm_io_set_deadline(io, client->source->config->client_login_timeout_ms);
+	for (;;) {
+		ssize_t rc = mm_io_peek(io, &first_byte, 1);
+		if (rc == 1) {
+			break;
+		}
+		if (rc == 0 || !machine_errno_retryable(machine_errno()) ||
+		    mm_io_wait_deadline(io) == MM_COND_WAIT_FAIL) {
+			od_wait_event_end(OD_WAIT_CONNECT_CLIENT_STARTUP);
+			return -1;
+		}
+	}
+	od_wait_event_end(OD_WAIT_CONNECT_CLIENT_STARTUP);
+
+	/* TLS handshake record type, never a valid startup packet length */
+	if (first_byte != 0x16) {
+		return 0;
+	}
+
+	if (io->is_unix_socket) {
+		od_error(&instance->logger, client, NULL,
+			 "direct SSL connection rejected on Unix socket");
+		return -1;
+	}
+
+	return 1;
+}
+
 static int od_frontend_startup(od_client_t *client)
 {
 	od_instance_t *instance = client->global->instance;
 	int ssl_done = 0;
 	int gss_done = 0;
+
+	if (client->source->config->tls_opts->tls_mode !=
+	    OD_CONFIG_TLS_DISABLE) {
+		int direct = od_frontend_direct_ssl_request(client);
+		if (direct == -1) {
+			goto error;
+		}
+		if (direct) {
+			if (od_tls_frontend_accept(client, &instance->logger,
+						   client->source->config,
+						   client->tls, 1) == -1) {
+				goto error;
+			}
+			ssl_done = 1;
+		}
+	}
 
 	while (1) {
 		int rc;
@@ -336,7 +387,7 @@ static int od_frontend_startup(od_client_t *client)
 		if (client->startup.is_ssl_request && !ssl_done) {
 			if (od_tls_frontend_accept(client, &instance->logger,
 						   client->source->config,
-						   client->tls) == -1) {
+						   client->tls, 0) == -1) {
 				goto error;
 			}
 

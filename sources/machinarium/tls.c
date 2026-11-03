@@ -296,6 +296,37 @@ static inline int mm_tls_opts_match(const mm_tls_ctx_t *entry,
 	       mm_tls_str_match(entry->ca_path, tls->ca_path);
 }
 
+static const unsigned char mm_tls_alpn_protos[] = {
+	10, 'p', 'o', 's', 't', 'g', 'r', 'e', 's', 'q', 'l',
+};
+
+static int mm_tls_alpn_cb(SSL *ssl, const unsigned char **out,
+			  unsigned char *outlen, const unsigned char *in,
+			  unsigned int inlen, void *arg)
+{
+	(void)ssl;
+	(void)arg;
+
+	int rc = SSL_select_next_proto((unsigned char **)out, outlen,
+				       mm_tls_alpn_protos,
+				       sizeof(mm_tls_alpn_protos), in, inlen);
+	if (rc == OPENSSL_NPN_NEGOTIATED) {
+		return SSL_TLSEXT_ERR_OK;
+	}
+	return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
+int mm_tls_alpn_used(mm_io_t *io)
+{
+	const unsigned char *selected = NULL;
+	unsigned int len = 0;
+
+	SSL_get0_alpn_selected(io->tls_ssl, &selected, &len);
+
+	return selected != NULL && len == sizeof(mm_tls_alpn_protos) - 1 &&
+	       memcmp(selected, mm_tls_alpn_protos + 1, len) == 0;
+}
+
 SSL_CTX *mm_tls_get_context(mm_io_t *io, int is_client)
 {
 	mm_tls_ctx_t **ctx_list;
@@ -431,6 +462,7 @@ SSL_CTX *mm_tls_get_context(mm_io_t *io, int is_client)
 		}
 
 		SSL_CTX_set_options(ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+		SSL_CTX_set_alpn_select_cb(ctx, mm_tls_alpn_cb, NULL);
 	}
 
 	/*

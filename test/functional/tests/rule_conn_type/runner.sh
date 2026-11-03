@@ -41,6 +41,12 @@ psql 'host=localhost port=6432 user=user_ro dbname=tsa_db sslmode=verify-full ss
 	cat /var/log/odyssey.log
 	exit 1
 }
+psql 'host=localhost port=6432 user=user_ro dbname=tsa_db sslmode=verify-full sslrootcert=/tests/rule_conn_type/root.pem sslnegotiation=direct' -c 'select 42' || {
+	echo 'tsa_db.user_ro should work with direct ssl'
+	sleep 1
+	cat /var/log/odyssey.log
+	exit 1
+}
 psql 'host=localhost port=6432 user=user_ro dbname=tsa_db sslmode=disable' -c 'select 42' && {
 	echo 'tsa_db.user_ro should route only with ssl enabled'
 	exit 1
@@ -49,6 +55,10 @@ psql 'host=localhost port=6432 user=user_ro dbname=tsa_db sslmode=disable' -c 's
 # tsa_db.user_rw has hostnosll connection type - only connections without ssl should work
 psql 'host=localhost port=6432 user=user_rw dbname=tsa_db sslmode=verify-full sslrootcert=/tests/rule_conn_type/root.pem' -c 'select 42' && {
 	echo 'tsa_db.user_rw should not work with ssl'
+	exit 1
+}
+psql 'host=localhost port=6432 user=user_rw dbname=tsa_db sslmode=verify-full sslrootcert=/tests/rule_conn_type/root.pem sslnegotiation=direct' -c 'select 42' && {
+	echo 'tsa_db.user_rw should not work with direct ssl'
 	exit 1
 }
 psql 'host=localhost port=6432 user=user_rw dbname=tsa_db sslmode=disable' -c 'select 42' || {

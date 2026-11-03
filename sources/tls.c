@@ -124,9 +124,11 @@ done:
 }
 
 int od_tls_frontend_accept(od_client_t *client, od_logger_t *logger,
-			   od_config_listen_t *config, machine_tls_t *tls)
+			   od_config_listen_t *config, machine_tls_t *tls,
+			   int direct)
 {
-	od_debug(logger, client, NULL, "ssl request");
+	od_debug(logger, client, NULL,
+		 direct ? "direct ssl request" : "ssl request");
 
 	int rc;
 	if (config->tls_opts->tls_mode == OD_CONFIG_TLS_DISABLE) {
@@ -148,19 +150,21 @@ int od_tls_frontend_accept(od_client_t *client, od_logger_t *logger,
 		return 0;
 	}
 
-	/* supported 'S' */
-	machine_msg_t *msg;
-	msg = machine_msg_create(sizeof(uint8_t));
-	if (msg == NULL) {
-		return -1;
-	}
-	uint8_t *type = machine_msg_data(msg);
-	*type = 'S';
-	rc = od_write(&client->io, msg);
-	if (rc == -1) {
-		od_error(logger, client, NULL, "write error: %s",
-			 od_io_error(&client->io));
-		return -1;
+	if (!direct) {
+		/* supported 'S' */
+		machine_msg_t *msg;
+		msg = machine_msg_create(sizeof(uint8_t));
+		if (msg == NULL) {
+			return -1;
+		}
+		uint8_t *type = machine_msg_data(msg);
+		*type = 'S';
+		rc = od_write(&client->io, msg);
+		if (rc == -1) {
+			od_error(logger, client, NULL, "write error: %s",
+				 od_io_error(&client->io));
+			return -1;
+		}
 	}
 
 	if (od_readahead_unread(&client->io.readahead) > 0) {
@@ -176,6 +180,13 @@ int od_tls_frontend_accept(od_client_t *client, od_logger_t *logger,
 			 "error: %s, login time %" PRIu64 " us",
 			 od_io_error(&client->io),
 			 machine_time_us() - client->time_accept);
+		return -1;
+	}
+
+	if (direct && !mm_tls_alpn_used(client->io.io)) {
+		od_error(
+			logger, client, NULL,
+			"received direct SSL connection request without ALPN protocol negotiation extension");
 		return -1;
 	}
 

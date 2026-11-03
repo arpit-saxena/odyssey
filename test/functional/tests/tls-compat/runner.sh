@@ -43,6 +43,20 @@ psql 'host=localhost port=7432 user=postgres dbname=postgres sslmode=verify-full
 psql 'host=localhost port=8432 user=postgres dbname=postgres sslmode=disable' || exit 1
 psql 'host=localhost port=8432 user=postgres dbname=postgres sslmode=verify-full sslrootcert=/tests/tls-compat/root.pem' || exit 1
 
+# direct tls (sslnegotiation=direct) skips SSLRequest and requires the postgresql ALPN
+psql 'host=localhost port=6432 user=postgres dbname=postgres sslmode=verify-full sslrootcert=/tests/tls-compat/root.pem sslnegotiation=direct' -c 'select 1' || exit 1
+psql 'host=localhost port=7432 user=postgres dbname=postgres sslmode=verify-full sslrootcert=/tests/tls-compat/root.pem sslnegotiation=direct' -c 'select 1' || exit 1
+openssl s_client -connect 127.0.0.1:6432 -alpn http/1.1 </dev/null && {
+    echo "should reject direct tls with unknown alpn"
+    exit 1
+}
+openssl s_client -connect 127.0.0.1:6432 </dev/null || exit 1
+sleep 1
+grep 'received direct SSL connection request without ALPN protocol negotiation extension' /var/log/odyssey.log || {
+    echo "should reject direct tls without alpn"
+    exit 1
+}
+
 # Check some read-only load will work with tls
 pgbench 'host=localhost port=6432 user=postgres dbname=postgres sslmode=verify-full sslrootcert=/tests/tls-compat/root.pem' -j 2 -c 10 --select-only --no-vacuum --progress 1 -T 20 || exit 1
 

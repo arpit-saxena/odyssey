@@ -504,6 +504,20 @@ ssize_t mm_io_read(mm_io_t *io, void *buf, size_t size)
 	return rc;
 }
 
+ssize_t mm_io_peek(mm_io_t *io, void *buf, size_t size)
+{
+	mm_errno_set(0);
+	if (io->error) {
+		mm_errno_set(io->error);
+		return -1;
+	}
+	ssize_t rc = recv(io->fd, buf, size, MSG_PEEK);
+	if (rc < 0) {
+		mm_errno_set(errno);
+	}
+	return rc;
+}
+
 int mm_io_read_pending(mm_io_t *io)
 {
 	if (mm_tls_is_active(io)) {
