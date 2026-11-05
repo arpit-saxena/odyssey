@@ -248,22 +248,30 @@ static void od_cron_err_stat(od_cron_t *cron)
 {
 	od_router_t *router = cron->global->router;
 
-	od_list_t *it;
-	od_list_foreach (&router->route_pool.list, it) {
-		od_route_t *current_route =
-			od_container_of(it, od_route_t, link);
-		od_route_lock(current_route);
-		{
-			if (current_route->extra_logging_enabled) {
-				od_err_logger_inc_interval(
-					current_route->err_logger);
-			}
-		}
-		od_route_unlock(current_route);
-	}
-
+	/*
+	 * The route pool list is modified under the router lock: new routes
+	 * are appended by od_router_route() and idle ones are unlinked by
+	 * od_router_gc(). Hold the router lock while walking the list here,
+	 * otherwise this iteration races with those updates. Taking the route
+	 * lock inside the router lock matches the order used by
+	 * od_router_foreach() callbacks.
+	 */
 	od_router_lock(router);
 	{
+		od_list_t *it;
+		od_list_foreach (&router->route_pool.list, it) {
+			od_route_t *current_route =
+				od_container_of(it, od_route_t, link);
+			od_route_lock(current_route);
+			{
+				if (current_route->extra_logging_enabled) {
+					od_err_logger_inc_interval(
+						current_route->err_logger);
+				}
+			}
+			od_route_unlock(current_route);
+		}
+
 		od_err_logger_inc_interval(router->router_err_logger);
 	}
 	od_router_unlock(router);
