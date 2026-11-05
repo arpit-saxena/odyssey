@@ -182,6 +182,7 @@ struct od_config {
 	od_list_t listen;
 
 	uint64_t backend_connect_timeout_ms;
+	uint64_t backend_drain_timeout_ms;
 	uint64_t cancel_timeout_ms;
 	int64_t cancel_queue_timeout_ms;
 	int cancel_max_inflight;

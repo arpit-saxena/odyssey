@@ -68,6 +68,7 @@ static const od_cfg_keyword_t keywords[] = {
 	{ "keepalive_usr_timeout", KEEPALIVE_USR_TIMEOUT },
 	{ "max_sigterms_to_die", MAX_SIGTERMS_TO_DIE },
 	{ "backend_connect_timeout_ms", BACKEND_CONNECT_TIMEOUT_MS },
+	{ "backend_drain_timeout_ms", BACKEND_DRAIN_TIMEOUT_MS },
 	{ "cancel_timeout_ms", CANCEL_TIMEOUT_MS },
 	{ "cancel_queue_timeout_ms", CANCEL_QUEUE_TIMEOUT_MS },
 	{ "cancel_max_inflight", CANCEL_MAX_INFLIGHT },

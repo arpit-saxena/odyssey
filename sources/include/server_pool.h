@@ -18,12 +18,15 @@ struct od_server_pool {
 	od_list_t idle;
 	int count_active;
 	int count_idle;
+	/* servers in OD_SERVER_CLOSING: counted, but on no list */
+	int count_closing;
 };
 
 static inline void od_server_pool_init(od_server_pool_t *pool)
 {
 	pool->count_active = 0;
 	pool->count_idle = 0;
+	pool->count_closing = 0;
 	od_list_init(&pool->idle);
 	od_list_init(&pool->active);
 }
@@ -63,6 +66,9 @@ OD_SERVER_POOL_FREE_DECLARE(pg, od_server_t, od_server_free)
 		case OD_SERVER_ACTIVE:                                         \
 			pool->count_active--;                                  \
 			break;                                                 \
+		case OD_SERVER_CLOSING:                                        \
+			pool->count_closing--;                                 \
+			break;                                                 \
 		}                                                              \
                                                                                \
 		od_list_t *target = NULL;                                      \
@@ -76,6 +82,9 @@ OD_SERVER_POOL_FREE_DECLARE(pg, od_server_t, od_server_free)
 		case OD_SERVER_ACTIVE:                                         \
 			target = &pool->active;                                \
 			pool->count_active++;                                  \
+			break;                                                 \
+		case OD_SERVER_CLOSING:                                        \
+			pool->count_closing++;                                 \
 			break;                                                 \
 		}                                                              \
                                                                                \
@@ -105,6 +114,7 @@ OD_SERVER_POOL_SET_DECLARE(pg, od_server_t)
 			target = &pool->active;                     \
 			break;                                      \
 		case OD_SERVER_UNDEF:                               \
+		case OD_SERVER_CLOSING:                             \
 			od_assert(0);                               \
 			break;                                      \
 		}                                                   \
@@ -131,6 +141,7 @@ static inline od_server_t *od_server_pool_foreach(od_server_pool_t *pool,
 		target = &pool->active;
 		break;
 	case OD_SERVER_UNDEF:
+	case OD_SERVER_CLOSING:
 		od_assert(0);
 		break;
 	}
@@ -157,7 +168,16 @@ static inline int od_server_pool_active(od_server_pool_t *pool)
 	return pool->count_active;
 }
 
+static inline int od_server_pool_closing(od_server_pool_t *pool)
+{
+	return pool->count_closing;
+}
+
+/*
+ * Every server that still holds a backend connection slot, including the
+ * ones whose backend is shutting down (OD_SERVER_CLOSING).
+ */
 static inline int od_server_pool_total(od_server_pool_t *pool)
 {
-	return pool->count_active + pool->count_idle;
+	return pool->count_active + pool->count_idle + pool->count_closing;
 }

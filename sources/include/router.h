@@ -64,6 +64,12 @@ void od_router_unroute(od_router_t *, od_client_t *);
 od_router_status_t od_router_attach(od_router_t *, od_client_t *, bool,
 				    od_storage_endpoint_t *, int immediate);
 /* returns 1 if someone was signalled, 0 otherwise */
+/*
+ * Return the pool slot of a server in OD_SERVER_CLOSING once its backend
+ * connection has been closed. Takes the route lock.
+ */
+void od_router_release_closed(od_router_t *, od_server_t *);
+
 void od_router_detach(od_router_t *, od_client_t *);
 void od_router_close(od_router_t *, od_client_t *);
 

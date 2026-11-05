@@ -128,6 +128,7 @@ static void od_cfg_global_merge(od_cfg_global_t *dst, od_cfg_global_t *src)
 	MERGE_I64(dst, src, keepalive_usr_timeout_ms);
 	MERGE_INT(dst, src, max_sigterms_to_die);
 	MERGE_U64(dst, src, backend_connect_timeout_ms);
+	MERGE_U64(dst, src, backend_drain_timeout_ms);
 	MERGE_U64(dst, src, cancel_timeout_ms);
 	MERGE_I64(dst, src, cancel_queue_timeout_ms);
 	MERGE_INT(dst, src, cancel_max_inflight);

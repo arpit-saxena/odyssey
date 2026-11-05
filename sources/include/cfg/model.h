@@ -127,6 +127,7 @@ typedef struct od_cfg_global {
 	od_cfg_i64_field_t keepalive_usr_timeout_ms;
 	od_cfg_int_field_t max_sigterms_to_die;
 	od_cfg_u64_field_t backend_connect_timeout_ms;
+	od_cfg_u64_field_t backend_drain_timeout_ms;
 	od_cfg_u64_field_t cancel_timeout_ms;
 	od_cfg_i64_field_t cancel_queue_timeout_ms;
 	od_cfg_int_field_t cancel_max_inflight;

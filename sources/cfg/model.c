@@ -478,6 +478,8 @@ void od_cfg_model_dumpf(FILE *file, const od_cfg_model_t *model)
 		 &model->global.max_sigterms_to_die);
 	dump_uint64(file, "backend_connect_timeout_ms", 0,
 		    &model->global.backend_connect_timeout_ms);
+	dump_uint64(file, "backend_drain_timeout_ms", 0,
+		    &model->global.backend_drain_timeout_ms);
 	dump_uint64(file, "cancel_timeout_ms", 0,
 		    &model->global.cancel_timeout_ms);
 	dump_int64(file, "cancel_queue_timeout_ms", 0,
@@ -962,6 +964,7 @@ void od_cfg_global_free(od_cfg_global_t *g)
 	od_cfg_i64_field_free(&g->keepalive_usr_timeout_ms);
 	od_cfg_int_field_free(&g->max_sigterms_to_die);
 	od_cfg_u64_field_free(&g->backend_connect_timeout_ms);
+	od_cfg_u64_field_free(&g->backend_drain_timeout_ms);
 	od_cfg_u64_field_free(&g->cancel_timeout_ms);
 	od_cfg_i64_field_free(&g->cancel_queue_timeout_ms);
 	od_cfg_int_field_free(&g->cancel_max_inflight);

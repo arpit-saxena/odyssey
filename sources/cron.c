@@ -229,8 +229,13 @@ static inline void od_cron_expire(od_cron_t *cron)
 			od_debug(&instance->logger, NULL, server,
 				 "closing idle server connection (%d secs)",
 				 server->idle_time);
-			server->route = NULL;
+			/*
+			 * the server is OD_SERVER_CLOSING: it still holds
+			 * its pool slot, so a replacement cannot be opened
+			 * until the backend has really gone away
+			 */
 			od_backend_close_connection(server);
+			od_router_release_closed(router, server);
 			od_backend_close(server);
 		}
 	}

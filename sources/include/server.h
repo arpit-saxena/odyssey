@@ -24,6 +24,14 @@ typedef enum {
 	OD_SERVER_UNDEF,
 	OD_SERVER_IDLE,
 	OD_SERVER_ACTIVE,
+	/*
+	 * Terminate was sent and the backend is still shutting down. The server
+	 * is on neither the idle nor the active list, but it still counts
+	 * against the pool size: PostgreSQL releases the connection slot only
+	 * when the backend exits, so a replacement opened earlier may be
+	 * refused with "sorry, too many clients already".
+	 */
+	OD_SERVER_CLOSING,
 } od_server_state_t;
 
 struct od_server {

@@ -78,6 +78,7 @@ megabytes) and is rejected by time-valued options.
 | `keepalive_probes`                         | int              | `3`         | SIGHUP  | Probes before killing conn                            |
 | `keepalive_usr_timeout`                    | int (ms)         | `0`         | SIGHUP  | 0 = use system default (`TCP_USER_TIMEOUT`); negative = pick automatically |
 | `backend_connect_timeout_ms`               | int (ms)         | `30000`     | SIGHUP  | Backend connection timeout                            |
+| `backend_drain_timeout_ms`                 | int (ms)         | `100`       | SIGHUP  | Wait for the backend to close after Terminate; 0 disables |
 | `coroutine_stack_size`                     | int (pages)      | `16`        | restart | Coroutine stack size (client/worker coroutines); values below 16 are not recommended |
 | `system_coroutine_stack_size`              | int (pages)      | `32`        | restart | Coroutine stack size for internal system coroutines   |
 | `client_max`                               | int              | `0`         | SIGHUP  | Max client connections (0/unset = no global limit); per-listen reserve via `reserved_clients` |
@@ -480,6 +481,22 @@ When the value is negative, Odyssey picks an appropriate timeout as
 Timeout for connection to backend (postgres). Default value is 30000 (30 secs)
 
 `backend_connect_timeout_ms 20000`
+
+## **backend_drain_timeout_ms**
+*integer*
+
+How long to wait, after sending Terminate to a server connection, for the
+backend to close its side of the connection. Default value is 100 (100 ms),
+0 disables the wait.
+
+PostgreSQL releases the backend's connection slot only when the backend
+process exits, which is also when it closes the socket. Until then the
+closed server keeps its place in the pool, so a replacement connection is
+not opened while the old backend still occupies a `max_connections` slot and
+would otherwise be refused with `sorry, too many clients already`. The wait
+is bounded: a backend that does not go away in time is closed anyway.
+
+`backend_drain_timeout_ms 100`
 
 ## **coroutine\_stack\_size**
 *integer*

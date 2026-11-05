@@ -214,6 +214,7 @@
 %token KEEPALIVE_USR_TIMEOUT "keepalive_usr_timeout"
 %token MAX_SIGTERMS_TO_DIE "max_sigterms_to_die"
 %token BACKEND_CONNECT_TIMEOUT_MS "backend_connect_timeout_ms"
+%token BACKEND_DRAIN_TIMEOUT_MS "backend_drain_timeout_ms"
 %token CANCEL_TIMEOUT_MS "cancel_timeout_ms"
 %token CANCEL_QUEUE_TIMEOUT_MS "cancel_queue_timeout_ms"
 %token CANCEL_MAX_INFLIGHT "cancel_max_inflight"
@@ -848,6 +849,14 @@ top_item:
 						&$2, 1, 0, INT_MAX,
 						@1,
 						"backend_connect_timeout_ms");
+		}
+	| BACKEND_DRAIN_TIMEOUT_MS time_value
+		{
+			od_cfg_set_time_u64_ms(ctx->diags,
+						&ctx->model->global.backend_drain_timeout_ms,
+						&$2, 1, 0, INT_MAX,
+						@1,
+						"backend_drain_timeout_ms");
 		}
 	| CANCEL_TIMEOUT_MS time_value
 		{

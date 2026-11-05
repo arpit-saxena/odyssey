@@ -85,7 +85,10 @@ static inline int pool_next_idle_shared_locked(od_route_t *route,
 	/*
 	 * the server can be replaced
 	 * - create new server, set it as IDLE
-	 * - close replaced
+	 * - close replaced: Terminate and wait for the backend to go away,
+	 *   so that the new server does not compete with it for a backend
+	 *   connection slot. The route lock is a coroutine mutex, so the
+	 *   wait yields, but the route stays locked meanwhile.
 	 * - TODO: do not do this with lock on route held
 	 * - TODO: maybe do not use some other's IDLE
 	 *   if we have capacity to create new?

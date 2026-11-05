@@ -220,8 +220,11 @@ static inline int od_router_expire_server_cb(od_server_t *server, void **argv)
 	od_list_t *expire_list = argv[0];
 	int *count = argv[1];
 
-	/* remove server for server pool */
-	od_server_set_pool_state(server, OD_SERVER_UNDEF);
+	/*
+	 * Take the server off the idle list, but keep its pool slot until the
+	 * backend has gone away: see od_router_release_closed()
+	 */
+	od_server_set_pool_state(server, OD_SERVER_CLOSING);
 
 	od_list_append(expire_list, &server->link);
 	(*count)++;
@@ -287,8 +290,11 @@ static inline int od_router_expire_server_tick_cb(od_server_t *server,
 		}
 	} /* else remove server because we are forced to */
 
-	/* remove server for server pool */
-	od_server_set_pool_state(server, OD_SERVER_UNDEF);
+	/*
+	 * Take the server off the idle list, but keep its pool slot until the
+	 * backend has gone away: see od_router_release_closed()
+	 */
+	od_server_set_pool_state(server, OD_SERVER_CLOSING);
 
 	/* add to expire list */
 	od_list_append(expire_list, &server->link);
@@ -324,10 +330,10 @@ static inline int od_router_expire_cb(od_route_t *route, void **argv)
 		route, OD_SERVER_IDLE, od_router_expire_server_tick_cb, argv);
 
 	/*
-	 * maybe we have closed expired IDLE
-	 * connection and pool state has been changed
+	 * the expired servers still hold their pool slots, the waiting
+	 * clients are signaled by od_router_release_closed() once the
+	 * backends are gone
 	 */
-	od_route_signal_locked(route, NULL);
 
 	od_route_unlock(route);
 
@@ -1152,6 +1158,24 @@ od_router_status_t od_router_attach(od_router_t *router, od_client_t *client,
 	return status;
 }
 
+void od_router_release_closed(od_router_t *router, od_server_t *server)
+{
+	(void)router;
+	od_route_t *route = server->route;
+	od_assert(route != NULL);
+	od_assert(server->state == OD_SERVER_CLOSING);
+
+	od_route_lock(route);
+
+	od_server_set_pool_state(server, OD_SERVER_UNDEF);
+	server->route = NULL;
+
+	/* the pool slot is free now, wake up the clients waiting for it */
+	od_route_signal_locked(route, NULL);
+
+	od_route_unlock(route);
+}
+
 void od_router_detach(od_router_t *router, od_client_t *client)
 {
 	(void)router;
@@ -1185,8 +1209,8 @@ void od_router_detach(od_router_t *router, od_client_t *client)
 	od_server_detach_client(server);
 
 	if (offline || is_repl) {
-		server->route = NULL;
-		od_server_set_pool_state(server, OD_SERVER_UNDEF);
+		/* keeps the pool slot until the backend is gone */
+		od_server_set_pool_state(server, OD_SERVER_CLOSING);
 		to_close = server;
 		server = NULL;
 	}
@@ -1210,7 +1234,9 @@ void od_router_detach(od_router_t *router, od_client_t *client)
 				 "closing obsolete server connection");
 		}
 
+		/* Terminate and wait for the backend without any lock held */
 		od_backend_close_connection(to_close);
+		od_router_release_closed(router, to_close);
 		od_backend_close(to_close);
 	}
 }
@@ -1236,10 +1262,11 @@ void od_router_close(od_router_t *router, od_client_t *client)
 
 	od_client_pool_set(&route->client_pool, client, OD_CLIENT_PENDING);
 	od_server_detach_client(server);
-	od_server_set_pool_state(server, OD_SERVER_UNDEF);
-	server->route = NULL;
-
-	od_route_signal_locked(route, NULL);
+	/*
+	 * Off the idle list, so no client can take it, but still counted
+	 * against pool_size until the backend has released its slot.
+	 */
+	od_server_set_pool_state(server, OD_SERVER_CLOSING);
 
 	od_route_unlock(route);
 	if (client_klock.found) {
@@ -1249,8 +1276,12 @@ void od_router_close(od_router_t *router, od_client_t *client)
 	}
 
 	/* Console readers cannot see this server after it leaves the pool. */
-	/* Terminate may wait on io, so send it without holding the pool lock. */
+	/*
+	 * Terminate and the wait for the backend to close may block on io,
+	 * so do them without holding the pool lock.
+	 */
 	od_backend_close_connection(server);
+	od_router_release_closed(router, server);
 	od_assert(server->io.io == NULL);
 	od_server_free(server);
 }

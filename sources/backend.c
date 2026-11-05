@@ -55,12 +55,98 @@ static inline int od_backend_terminate(od_server_t *server)
 	return od_write(&server->io, msg);
 }
 
+/*
+ * Wait until the backend closes its side of the connection in response to
+ * Terminate, or until backend_drain_timeout_ms passes.
+ *
+ * PostgreSQL releases the backend's connection slot (PGPROC) before the
+ * backend process exits and the socket is closed. A replacement connection
+ * opened before that point competes with the dying backend for the slot and
+ * can be refused with "sorry, too many clients already". Reading up to EOF
+ * is the only signal that the slot is free again.
+ *
+ * Yields the coroutine while waiting; the caller must not hold locks that
+ * other threads may spin on. The route lock is a coroutine mutex and is
+ * safe to hold, although every other coroutine of the route is then stalled
+ * for the duration of the wait.
+ */
+static void od_backend_wait_closed(od_server_t *server)
+{
+	od_instance_t *instance = server->global->instance;
+	uint64_t timeout_ms = instance->config.backend_drain_timeout_ms;
+	if (timeout_ms == 0) {
+		return;
+	}
+	if (timeout_ms > UINT32_MAX) {
+		timeout_ms = UINT32_MAX;
+	}
+
+	od_io_t *io = &server->io;
+	uint64_t start_ms = machine_time_ms();
+	uint64_t deadline_ms = start_ms + timeout_ms;
+	mm_io_set_deadline(io->io, (uint32_t)timeout_ms);
+
+	char buf[256];
+	for (;;) {
+		ssize_t rc = machine_read_raw(io->io, buf, sizeof(buf));
+		if (rc > 0) {
+			/* late replies to the client we no longer serve */
+			if (machine_time_ms() >= deadline_ms) {
+				od_debug(&instance->logger, NULL, server,
+					 "backend still sending data %" PRIu64
+					 " ms after Terminate, closing",
+					 timeout_ms);
+				return;
+			}
+			continue;
+		}
+		if (rc == 0) {
+			od_debug(&instance->logger, NULL, server,
+				 "backend closed connection %" PRIu64
+				 " ms after Terminate",
+				 machine_time_ms() - start_ms);
+			return;
+		}
+
+		int errno_ = machine_errno();
+		if (!machine_errno_retryable(errno_)) {
+			od_debug(
+				&instance->logger, NULL, server,
+				"backend connection failed after Terminate: %s",
+				strerror(errno_));
+			return;
+		}
+
+		rc = mm_io_wait_deadline(io->io);
+		if (rc == MM_COND_WAIT_FAIL) {
+			/* timeout or cancellation: close without waiting */
+			od_log(&instance->logger, NULL, server,
+			       "backend did not close connection within %" PRIu64
+			       " ms after Terminate, closing",
+			       timeout_ms);
+			return;
+		}
+		/* readable, or a propagated peer event: read again */
+	}
+}
+
 static void od_backend_disconnect(od_server_t *server, int graceful)
 {
 	od_assert(server != NULL);
 	if (!od_backend_not_connected(server)) {
 		if (graceful && mm_io_connected(server->io.io)) {
-			od_backend_terminate(server);
+			/*
+			 * Pooled idle servers are detached from any event
+			 * loop. Both Terminate and the wait below need the io
+			 * attached to the current machine.
+			 */
+			int rc = od_io_attach(&server->io);
+			if (rc == 0 || machine_errno() == EINPROGRESS) {
+				rc = od_backend_terminate(server);
+			}
+			if (rc == 0 && server->global != NULL) {
+				od_backend_wait_closed(server);
+			}
 		}
 
 		od_io_close(&server->io);

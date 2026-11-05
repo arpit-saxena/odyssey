@@ -547,6 +547,8 @@ int convert_global(const od_cfg_global_t *cfg, od_config_t *config,
 	COPY_INT(cfg->max_sigterms_to_die, config->max_sigterms_to_die);
 	COPY_U64(cfg->backend_connect_timeout_ms,
 		 config->backend_connect_timeout_ms);
+	COPY_U64(cfg->backend_drain_timeout_ms,
+		 config->backend_drain_timeout_ms);
 	COPY_U64(cfg->cancel_timeout_ms, config->cancel_timeout_ms);
 	COPY_I64(cfg->cancel_queue_timeout_ms, config->cancel_queue_timeout_ms);
 	COPY_INT(cfg->cancel_max_inflight, config->cancel_max_inflight);
